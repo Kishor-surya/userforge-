@@ -1,0 +1,369 @@
+:root {
+  --bg: #f9fafb;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --primary-start: #f97316;
+  --primary-end: #ec4899;
+  --primary: #ea580c;
+  --success-bg: #ecfdf5;
+  --success-text: #047857;
+  --warning-bg: #fffbeb;
+  --warning-text: #92400e;
+  --danger-bg: #fef2f2;
+  --danger-text: #b91c1c;
+  --info-bg: #eff6ff;
+  --info-text: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --surface: #1c1f26;
+    --border: #2c313a;
+    --text: #e6e8eb;
+    --muted: #9aa1ab;
+    --success-bg: #052e21;
+    --success-text: #34d399;
+    --warning-bg: #3a2a05;
+    --warning-text: #fbbf24;
+    --danger-bg: #3a0d0d;
+    --danger-text: #f87171;
+    --info-bg: #0b2447;
+    --info-text: #93c5fd;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.15rem;
+}
+
+.logo-row h1 {
+  font-size: 1.45rem;
+  margin: 0;
+  line-height: 1.1;
+  background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0 0 1.25rem 0;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.nav-item.active {
+  background: rgba(249, 115, 22, 0.14);
+  font-weight: 600;
+}
+
+.sidebar-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1rem 0;
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.metric-card {
+  background: rgba(249, 115, 22, 0.08);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+}
+
+.metric-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.metric-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.sidebar-footnote {
+  margin-top: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding-top: 1rem;
+}
+
+/* Main content */
+.main-content {
+  flex: 1;
+  padding: 1.75rem 2.25rem;
+  max-width: 1100px;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.6rem;
+  margin: 0 0 0.35rem 0;
+}
+
+.page-caption {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.25rem 0;
+}
+
+/* Forms */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+}
+
+.field {
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.radio-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+
+.radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  filter: brightness(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  border: none;
+  color: white;
+}
+
+.btn-danger {
+  border-color: var(--danger-text);
+  color: var(--danger-text);
+}
+
+.btn-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Alerts */
+.alert {
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  margin-bottom: 0.6rem;
+}
+
+.alert-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.alert-error {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.alert-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.alert-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+th,
+td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  background: rgba(127, 127, 127, 0.06);
+  font-weight: 600;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-valid {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.badge-invalid {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.toolbar .field {
+  margin-bottom: 0;
+  min-width: 200px;
+  flex: 1;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 2.5rem 0;
+  color: var(--muted);
+}
+
+.empty-state svg {
+  margin-bottom: 0.5rem;
+}
+
+.caption {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+}
