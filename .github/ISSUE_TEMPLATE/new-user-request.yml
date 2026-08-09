@@ -1,0 +1,74 @@
+name: "\U0001F464 New User Request"
+description: Request a new user be added to UserForge. Only requests from repo owners/collaborators are processed automatically.
+title: "[New User] "
+labels: ["user-request", "new-user"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Submitting this form creates a real user record in UserForge and sends them a
+        welcome email. Only issues opened by a repo owner or collaborator are processed
+        automatically — anyone else's request will be closed unactioned.
+  - type: input
+    id: full_name
+    attributes:
+      label: Full Name
+      placeholder: Jane Doe
+    validations:
+      required: true
+  - type: input
+    id: email
+    attributes:
+      label: Email
+      placeholder: jane.doe@example.com
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone
+      placeholder: "9876543210"
+    validations:
+      required: false
+  - type: input
+    id: age
+    attributes:
+      label: Age
+      placeholder: "28"
+    validations:
+      required: false
+  - type: dropdown
+    id: department
+    attributes:
+      label: Department
+      options:
+        - Engineering
+        - Sales
+        - Marketing
+        - HR
+        - Finance
+        - Operations
+        - Support
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      options:
+        - Admin
+        - Manager
+        - Employee
+        - Contractor
+        - Intern
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Active
+        - Inactive
+    validations:
+      required: false

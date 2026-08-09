@@ -1,0 +1,126 @@
+name: User Request Sync
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  process-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Handle user request issue
+        uses: actions/github-script@v7
+        env:
+          API_BASE_URL: ${{ vars.VERCEL_APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const labelNames = issue.labels.map((l) => l.name);
+
+            // Not one of our Issue Forms (e.g. a normal bug report) — leave it alone.
+            if (!labelNames.includes("user-request")) {
+              return;
+            }
+
+            const allowedAssociations = ["OWNER", "MEMBER", "COLLABORATOR"];
+            if (!allowedAssociations.includes(issue.author_association)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: "🚫 This request was not submitted by a repository owner or collaborator, so it was not processed.",
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+                labels: [...labelNames, "unauthorized"],
+              });
+              return;
+            }
+
+            if (!process.env.API_BASE_URL || !process.env.INTERNAL_API_SECRET) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body:
+                  "⚠️ This repo isn't fully configured yet — missing the `VERCEL_APP_URL` " +
+                  "repository variable or `INTERNAL_API_SECRET` repository secret " +
+                  "(Settings → Secrets and variables → Actions).",
+              });
+              return;
+            }
+
+            const body = issue.body || "";
+            function field(label) {
+              const re = new RegExp(`### ${label}\\s*\\n+([^\\n#]*)`, "i");
+              const m = body.match(re);
+              if (!m) return "";
+              const value = m[1].trim();
+              return value === "_No response_" ? "" : value;
+            }
+
+            const isDelete = labelNames.includes("delete-user");
+            const payload = isDelete
+              ? { type: "delete", email: field("Email of user to delete") }
+              : {
+                  type: "create",
+                  fullName: field("Full Name"),
+                  email: field("Email"),
+                  phone: field("Phone"),
+                  age: field("Age"),
+                  department: field("Department"),
+                  role: field("Role"),
+                  status: field("Status") || "Active",
+                };
+
+            const res = await fetch(`${process.env.API_BASE_URL}/api/github-user-request`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Internal-Secret": process.env.INTERNAL_API_SECRET,
+              },
+              body: JSON.stringify(payload),
+            });
+            const result = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+              const summary = isDelete
+                ? `✅ Deleted user \`${payload.email}\`.`
+                : `✅ Created user **${payload.fullName}** (\`${payload.email}\`).` +
+                  (result.emailSent
+                    ? " 📧 Welcome email sent."
+                    : ` ⚠️ Welcome email not sent: ${result.emailError || "unknown error"}`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: summary,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `❌ Request failed: ${result.error || res.statusText}`,
+              });
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ["needs-fix"],
+              });
+            }

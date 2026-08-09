@@ -43,6 +43,8 @@ Browser (React) ──CRUD──▶ Supabase Postgres
 3. Go to **Project Settings → API** and copy:
    - **Project URL** → `VITE_SUPABASE_URL`
    - **anon public key** → `VITE_SUPABASE_ANON_KEY`
+   - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (⚠️ full database access,
+     bypasses RLS — never expose this to the browser, only `/api` routes use it)
 
 ## 3. Set up Gmail App Password (for welcome emails)
 
@@ -56,7 +58,7 @@ Browser (React) ──CRUD──▶ Supabase Postgres
 
 ```bash
 npm install
-cp .env.example .env    # fill in the 6 values from steps 2 and 3
+cp .env.example .env    # fill in the values from steps 2 and 3 (skip INTERNAL_API_SECRET for now — step 6)
 npm install -g vercel   # one-time, free CLI — needed to run the /api function locally
 vercel dev               # serves the React app AND /api/* together
 ```
@@ -73,10 +75,37 @@ too (Vite on port 5173), but calls to `/api/send-welcome-email` will 404.
 1. Push this repo to GitHub.
 2. In the Vercel dashboard: **Add New → Project → Import** your GitHub repo.
    Vercel auto-detects Vite + the `/api` folder — no config needed.
-3. Before the first deploy, add the same 6 environment variables from your
-   `.env` file under **Project Settings → Environment Variables**.
+3. Before the first deploy, add the environment variables from your `.env`
+   file under **Project Settings → Environment Variables** (`INTERNAL_API_SECRET`
+   included — set in step 6 below, but fine to add here too).
 4. Deploy. You'll get a public `https://userforge-xxxx.vercel.app` URL.
 5. Every future `git push` to your default branch auto-redeploys.
+
+## 6. Set up "create/delete user via GitHub issue"
+
+Opening a **"👤 New User Request"** or **"🗑️ Delete User Request"** issue (from
+the *Issues → New issue* picker) creates/deletes a real user and — for
+creation — sends them the welcome email, automatically. **Only issues opened
+by a repo owner or collaborator are processed** — anyone else's request gets
+closed with an "unauthorized" comment and nothing happens.
+
+Setup (one-time):
+
+1. Generate a random secret, e.g. `openssl rand -hex 32` (or any password
+   generator — it just needs to be long and random).
+2. Add it in **two places** with the exact same value:
+   - Vercel: **Project Settings → Environment Variables** → `INTERNAL_API_SECRET`
+   - GitHub: **repo Settings → Secrets and variables → Actions → Secrets tab**
+     → **New repository secret** → name `INTERNAL_API_SECRET`
+3. Also add a GitHub repo **variable** (not secret — it's not sensitive):
+   **Settings → Secrets and variables → Actions → Variables tab** → **New
+   repository variable** → name `VERCEL_APP_URL`, value your production URL
+   (e.g. `https://userforge-7vx1.vercel.app`, no trailing slash).
+4. Redeploy on Vercel so it picks up `INTERNAL_API_SECRET`.
+
+Now try it: **Issues → New issue → "👤 New User Request"**, fill in the form,
+submit. Within a few seconds the Action comments on the issue with the
+result and closes it.
 
 ## Project structure
 
@@ -93,8 +122,17 @@ userforge/
 │   │   └── emailClient.js       # calls /api/send-welcome-email
 │   └── assets/                  # logo.svg, empty-state.svg
 ├── api/
-│   ├── send-welcome-email.js    # Vercel serverless function (Nodemailer + Gmail)
+│   ├── _supabaseAdmin.js        # server-side Supabase client (service_role key, bypasses RLS)
+│   ├── _mailer.js                # shared Nodemailer/Gmail email builder+sender
+│   ├── send-welcome-email.js    # called by the browser after a create/import
+│   ├── github-user-request.js   # called only by the GitHub Action below (secret-authenticated)
 │   └── health.js                # reports whether email is configured (used by the sidebar)
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── new-user-request.yml
+│   │   └── delete-user-request.yml
+│   └── workflows/
+│       └── user-request-sync.yml  # authorizes + processes the above issue forms
 ├── supabase/
 │   └── schema.sql               # users table + RLS policy
 └── .env.example
@@ -109,18 +147,28 @@ userforge/
   fields, bad email/phone format, in-file and DB duplicate emails) before
   import; downloadable template
 - **Export** the full list as CSV or Excel
-- **Welcome emails** — sent automatically (single add and bulk import) with
-  the user's department and role in the email body
+- **Welcome emails** — sent automatically (single add, bulk import, *and*
+  GitHub-issue requests) with the user's department and role in the email body
+- **Create/delete via GitHub issue** — repo owners/collaborators can open a
+  "New User Request" or "Delete User Request" issue to trigger the same
+  create-or-delete-plus-email flow, without opening the app (see setup step 6)
 
-## Security note
+## Security notes
 
-The Supabase **anon key** is public by design (it ships in the browser
-bundle) and the RLS policy in `schema.sql` grants it full read/write access
-to the `users` table. That's fine for a personal/internal tool you don't
-share widely. If you plan to expose this app's URL to people you don't
-trust, add [Supabase Auth](https://supabase.com/docs/guides/auth) and scope
-the RLS policy to authenticated users instead.
-
-The Gmail credentials (`GMAIL_USER` / `GMAIL_APP_PASSWORD`) are **server-side
-only** — they're never sent to the browser, only used inside the
-`/api/send-welcome-email` serverless function.
+- The Supabase **anon key** is public by design (it ships in the browser
+  bundle) and the RLS policy in `schema.sql` grants it full read/write access
+  to the `users` table. That's fine for a personal/internal tool you don't
+  share widely. If you plan to expose this app's URL to people you don't
+  trust, add [Supabase Auth](https://supabase.com/docs/guides/auth) and scope
+  the RLS policy to authenticated users instead.
+- The Gmail credentials (`GMAIL_USER` / `GMAIL_APP_PASSWORD`) and the Supabase
+  **service_role key** are **server-side only** — never sent to the browser,
+  only used inside `/api` serverless functions.
+- `/api/send-welcome-email` only sends if a matching row already exists in
+  the `users` table, so it can't be used as a blind relay to email arbitrary
+  addresses.
+- `/api/github-user-request` requires a shared secret header
+  (`INTERNAL_API_SECRET`) that only the GitHub Action knows, and the Action
+  itself refuses to act on issues from anyone who isn't a repo owner/member/
+  collaborator (`author_association` check) — so opening a request issue as
+  a random public visitor does nothing but get the issue closed.
