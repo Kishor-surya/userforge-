@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Upload, Download } from "lucide-react";
 
-import { bulkInsertUsers, emailExists } from "../lib/api";
+import { adminBulkCreateUsers } from "../lib/adminApi";
 import { downloadBlob, parseUploadFile, uploadTemplateBlob, validateUploadRows } from "../lib/csvExcel";
-import { sendWelcomeEmail } from "../lib/emailClient";
 
 export default function BulkUpload({ onUsersImported }) {
   const [rows, setRows] = useState([]);
@@ -23,7 +22,10 @@ export default function BulkUpload({ onUsersImported }) {
 
     try {
       const rawRows = await parseUploadFile(file);
-      const validated = await validateUploadRows(rawRows, (email) => emailExists(email));
+      // In-file duplicate/format checks only here -- the anon key can't
+      // read the users table anymore (RLS), so the DB-duplicate check now
+      // happens server-side, per row, at import time instead of preview time.
+      const validated = await validateUploadRows(rawRows);
       setRows(validated);
     } catch (err) {
       setError(err.message || "Could not read that file. Make sure it's a valid CSV or Excel file.");
@@ -40,26 +42,15 @@ export default function BulkUpload({ onUsersImported }) {
     setAlert(null);
     try {
       const validRows = rows.filter((r) => r.valid);
-      const created = await bulkInsertUsers(validRows);
+      const { created, emailsSent, results } = await adminBulkCreateUsers(validRows);
+      const failed = results.filter((r) => !r.ok);
 
-      let sentCount = 0;
-      let failedCount = 0;
-      for (const u of created) {
-        const { sent } = await sendWelcomeEmail({
-          email: u.email,
-          fullName: u.full_name,
-          department: u.department,
-          role: u.role,
-        });
-        if (sent) sentCount += 1;
-        else failedCount += 1;
+      let message = `Imported ${created} of ${validRows.length} valid row(s). 📧 Sent ${emailsSent} invite email(s).`;
+      if (failed.length > 0) {
+        message += ` ${failed.length} row(s) failed: ${failed.map((f) => `${f.email} (${f.error})`).join("; ")}`;
       }
 
-      let message = `Imported ${created.length} user(s) successfully.`;
-      message += ` 📧 Sent ${sentCount} welcome email(s).`;
-      if (failedCount) message += ` ${failedCount} failed.`;
-
-      setAlert({ kind: "success", message });
+      setAlert({ kind: failed.length > 0 ? "warning" : "success", message });
       setRows([]);
       onUsersImported();
     } catch (err) {
@@ -98,7 +89,7 @@ export default function BulkUpload({ onUsersImported }) {
         <>
           <p>
             <strong>{rows.length} row(s) found</strong> — {validCount} valid, {rows.length - validCount} with
-            errors.
+            errors. (Database duplicates are checked at import time, not shown here.)
           </p>
           <div className="table-wrap">
             <table>

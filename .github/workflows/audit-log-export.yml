@@ -1,0 +1,38 @@
+name: Audit Log Export
+
+# Runs every 4 hours. Pulls login/logout events from Supabase and uploads
+# them as a private GitHub Actions artifact (visible only to people with
+# repo access, auto-expires) -- deliberately NOT committed to the repo or
+# published to the wiki, since this repo is public and the export contains
+# real users' email addresses.
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch audit log from UserForge
+        env:
+          API_BASE_URL: ${{ vars.VERCEL_APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$INTERNAL_API_SECRET" ]; then
+            echo "Missing VERCEL_APP_URL variable or INTERNAL_API_SECRET secret -- skipping." >&2
+            exit 1
+          fi
+          curl -sf -H "X-Internal-Secret: $INTERNAL_API_SECRET" \
+            "$API_BASE_URL/api/export-audit-log" -o audit-log-export.json
+          echo "Fetched $(node -pe 'JSON.parse(require("fs").readFileSync("audit-log-export.json")).count') event(s)."
+
+      - name: Upload as a private artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-log-${{ github.run_id }}
+          path: audit-log-export.json
+          retention-days: 30

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { UserCog, Save, Trash2 } from "lucide-react";
 
-import { deleteUser, emailExists, updateUser } from "../lib/api";
+import { adminDeleteUser, adminUpdateUser } from "../lib/adminApi";
 import { DEPARTMENTS, ROLES, STATUSES } from "../lib/constants";
 import { validateUserForm } from "../lib/validation";
 import EmptyState from "./EmptyState";
@@ -59,11 +59,12 @@ export default function EditDeleteUser({ users, onUserChanged }) {
     setBusy(true);
     setAlert(null);
 
+    // Format/required-field checks only -- duplicate-email checking happens
+    // server-side now (see AddUser.jsx for why).
     const validationErrors = await validateUserForm({
       fullName: form.fullName,
       email: form.email,
       phone: form.phone,
-      checkDuplicate: (email) => emailExists(email, selectedId),
     });
 
     if (validationErrors.length > 0) {
@@ -74,7 +75,7 @@ export default function EditDeleteUser({ users, onUserChanged }) {
     setErrors([]);
 
     try {
-      await updateUser(selectedId, {
+      await adminUpdateUser(selectedId, {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
@@ -96,8 +97,8 @@ export default function EditDeleteUser({ users, onUserChanged }) {
     setBusy(true);
     setAlert(null);
     try {
-      await deleteUser(selectedId);
-      setAlert({ kind: "success", message: "User deleted successfully." });
+      await adminDeleteUser(selectedId);
+      setAlert({ kind: "success", message: "User deleted successfully (their login access was also revoked)." });
       onUserChanged();
     } catch (err) {
       setAlert({ kind: "error", message: err.message || "Delete failed." });

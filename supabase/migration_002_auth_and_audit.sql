@@ -1,27 +1,13 @@
--- Run this once in the Supabase SQL Editor (Project -> SQL Editor -> New query)
--- for a BRAND NEW UserForge project. If you already ran an earlier version
--- of this file, use supabase/migration_002_auth_and_audit.sql instead --
--- this file reflects the full current state, not an incremental diff.
+-- Migration 002: Supabase Auth integration, department-scoped RLS, login audit log.
+-- Run this in the Supabase SQL Editor for your EXISTING UserForge project
+-- (schema.sql already reflects this as the full fresh-install state, for
+-- anyone setting up a brand new project instead). Safe to re-run.
 
-create table if not exists public.users (
-  id bigint generated always as identity primary key,
-  full_name text not null,
-  email text not null unique,
-  phone text,
-  age integer,
-  department text,
-  role text,
-  status text not null default 'Active',
-  auth_user_id uuid references auth.users(id) on delete set null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+alter table public.users
+  add column if not exists auth_user_id uuid references auth.users(id) on delete set null;
 
-create index if not exists users_email_idx on public.users (email);
 create unique index if not exists users_auth_user_id_idx on public.users (auth_user_id)
   where auth_user_id is not null;
-
-alter table public.users enable row level security;
 
 -- Lets an RLS policy check "what department is the CALLING user in" without
 -- recursively re-applying RLS to that same lookup. SECURITY DEFINER runs as
@@ -38,16 +24,15 @@ as $$
   select department from public.users where auth_user_id = auth.uid() limit 1;
 $$;
 
--- SECURITY MODEL:
--- - Real users authenticate via Supabase Auth (a magic-link invite email;
---   they set their own password, which this app never sees or stores) and
---   can only SELECT users in their own department.
--- - There is deliberately NO anon-role policy: the public anon key (which
---   ships in the browser bundle by necessity) grants zero direct table
---   access. All writes -- create/update/delete/bulk-import -- go through
---   server-side /api routes using the service_role key, which bypasses RLS
---   entirely and needs no policy of its own. Those routes enforce their own
---   authorization (admin token, or GitHub Action author-association check).
+-- Replace the old "anon has full access" policy. Real users now
+-- authenticate via Supabase Auth (magic-link invite -> they set their own
+-- password) and can only see users in their own department. All writes
+-- (create/update/delete/bulk-import) go through server-side API routes
+-- using the service_role key, which bypasses RLS entirely and needs no
+-- policy of its own.
+drop policy if exists "Allow anon full access" on public.users;
+
+drop policy if exists "Authenticated users see their own department" on public.users;
 create policy "Authenticated users see their own department" on public.users
   for select
   to authenticated

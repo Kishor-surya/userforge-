@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { List, UserPlus, Upload, UserCog, Download, Mail } from "lucide-react";
+import { List, UserPlus, Upload, UserCog, Download, History, LogOut, Mail } from "lucide-react";
 
 import logoUrl from "../assets/logo.svg";
 
@@ -9,9 +9,10 @@ export const PAGES = [
   { key: "upload", label: "Bulk Upload", icon: Upload },
   { key: "edit", label: "Edit / Delete User", icon: UserCog },
   { key: "export", label: "Export Data", icon: Download },
+  { key: "audit", label: "Audit Log", icon: History },
 ];
 
-export default function Sidebar({ page, onNavigate, totalUsers, activeUsers }) {
+export default function Sidebar({ page, onNavigate, totalUsers, activeUsers, onLogout }) {
   const [emailStatus, setEmailStatus] = useState(null);
 
   useEffect(() => {
@@ -71,6 +72,10 @@ export default function Sidebar({ page, onNavigate, totalUsers, activeUsers }) {
         {emailStatus && emailStatus.emailConfigured && `Welcome emails enabled via ${emailStatus.smtpHost}`}
         {emailStatus && !emailStatus.emailConfigured && "Welcome emails not configured — see README."}
       </div>
+
+      <button className="btn" style={{ marginTop: "0.75rem" }} onClick={onLogout}>
+        <LogOut size={16} /> Log out (admin)
+      </button>
     </aside>
   );
 }

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
 
-import { addUser, emailExists } from "../lib/api";
+import { adminCreateUser } from "../lib/adminApi";
 import { DEPARTMENTS, ROLES, STATUSES } from "../lib/constants";
-import { sendWelcomeEmail } from "../lib/emailClient";
 import { validateUserForm } from "../lib/validation";
 
 const initialForm = {
@@ -31,11 +30,14 @@ export default function AddUser({ onUserAdded }) {
     setSubmitting(true);
     setAlert(null);
 
+    // Format/required-field checks only -- duplicate-email checking now
+    // happens server-side (the anon key has no read access to the users
+    // table anymore; RLS restricts it to each signed-in user's own
+    // department).
     const validationErrors = await validateUserForm({
       fullName: form.fullName,
       email: form.email,
       phone: form.phone,
-      checkDuplicate: (email) => emailExists(email),
     });
 
     if (validationErrors.length > 0) {
@@ -46,7 +48,7 @@ export default function AddUser({ onUserAdded }) {
     setErrors([]);
 
     try {
-      await addUser({
+      const result = await adminCreateUser({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
@@ -57,16 +59,10 @@ export default function AddUser({ onUserAdded }) {
       });
 
       let message = `User '${form.fullName}' added successfully.`;
-      const { sent, error } = await sendWelcomeEmail({
-        email: form.email.trim(),
-        fullName: form.fullName.trim(),
-        department: form.department,
-        role: form.role,
-      });
-      if (sent) {
-        message += ` 📧 Welcome email sent to ${form.email.trim()}.`;
-      } else if (error) {
-        message += ` (Welcome email not sent: ${error})`;
+      if (result.emailSent) {
+        message += ` 📧 Invite email sent to ${form.email.trim()}.`;
+      } else if (result.emailError) {
+        message += ` (Invite email not sent: ${result.emailError})`;
       }
 
       setAlert({ kind: "success", message });

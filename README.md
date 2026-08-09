@@ -1,29 +1,38 @@
 # UserForge
 
-A React user-management app: create/edit/delete users, search & filter, bulk
-CSV/Excel import with per-row validation, CSV/Excel export, and automatic
-"welcome" email notifications (via Gmail) whenever a user is added.
+A React user-management app with real authentication: admins manage the
+full roster (create/edit/delete, bulk CSV/Excel import, export), while
+regular users sign in and see only their own department. New users get an
+emailed invite link to set up their own account — no password is ever
+generated, emailed, or stored by this app.
 
 Runs entirely on free tiers with **no server for you to manage**:
 
 - **Frontend**: React + Vite, hosted on [Vercel](https://vercel.com) (free)
-- **Database**: [Supabase](https://supabase.com) Postgres (free) — the React app talks
-  to it directly using the Supabase client SDK, no custom CRUD backend needed
-- **Email**: one small Vercel serverless function (`/api/send-welcome-email`)
-  using [Nodemailer](https://nodemailer.com) over Gmail SMTP — this is the only
-  part that truly needs server-side code, since browsers can't open raw SMTP
-  connections
+- **Database + Auth**: [Supabase](https://supabase.com) Postgres (free) — Supabase Auth
+  handles real user accounts; Postgres Row Level Security restricts each
+  signed-in user to their own department
+- **Email**: Vercel serverless functions using [Nodemailer](https://nodemailer.com)
+  over Gmail SMTP — the only part that truly needs server-side code, since
+  browsers can't open raw SMTP connections (or call Supabase's admin API,
+  which also has to happen server-side)
 
 ```
-Browser (React) ──CRUD──▶ Supabase Postgres
-        │
-        └──POST /api/send-welcome-email──▶ Vercel serverless function ──▶ Gmail SMTP
+Admin browser ──X-Admin-Token──▶ /api/{create,update,delete}-user, /api/admin-users ──▶ Supabase (service_role, bypasses RLS)
+                                          │
+                                          └──▶ Supabase Auth invite link ──▶ Gmail SMTP (branded invite email)
+
+Regular user browser ──Supabase session──▶ Supabase Postgres directly (RLS: own department only)
+
+GitHub issue (owner/collaborator only) ──Action──▶ /api/github-user-request (shared secret) ──▶ same creation path
 ```
 
 > **I could not run `npm install` / `npm run dev` in the environment that generated
-> this code** — Node.js isn't installed there. Everything below was written and
-> reviewed carefully, but you're the first to actually run it. If something doesn't
-> compile, paste the error and it can be fixed quickly.
+> this code** — Node.js isn't installed there. Everything below was written
+> carefully and follows Supabase's documented patterns, but the auth/invite-link
+> flow in particular (`src/lib/auth.js`, `SetPassword.jsx`, the `type=invite` URL
+> handling in `App.jsx`) is the piece most in need of hands-on testing, since I
+> can't exercise a real browser redirect here. Test that flow first.
 
 ## 1. Prerequisites (all free)
 
@@ -33,20 +42,24 @@ Browser (React) ──CRUD──▶ Supabase Postgres
 - A Gmail account with **2-Step Verification enabled**, so you can generate an
   **App Password** (regular Gmail passwords don't work for SMTP)
 
-## 2. Set up Supabase (the database)
+## 2. Set up Supabase (database + auth)
 
 1. Create a new project at [supabase.com](https://supabase.com) (free tier).
 2. Open **SQL Editor → New query**, paste the contents of
-   [`supabase/schema.sql`](supabase/schema.sql), and run it. This creates the
-   `users` table and a permissive row-level-security policy for the anon key
-   (see the security note in that file).
+   [`supabase/schema.sql`](supabase/schema.sql), and run it. (Already have an
+   older version of this project? Run
+   [`supabase/migration_002_auth_and_audit.sql`](supabase/migration_002_auth_and_audit.sql)
+   instead — it's the incremental diff, safe to run on existing data.)
 3. Go to **Project Settings → API** and copy:
    - **Project URL** → `VITE_SUPABASE_URL`
    - **anon public key** → `VITE_SUPABASE_ANON_KEY`
    - **service_role key** → `SUPABASE_SERVICE_ROLE_KEY` (⚠️ full database access,
      bypasses RLS — never expose this to the browser, only `/api` routes use it)
+4. Go to **Authentication → URL Configuration** and set **Site URL** to your
+   deployed app's URL (same value you'll use for `APP_URL` below). This is
+   where invite links redirect people after they click them.
 
-## 3. Set up Gmail App Password (for welcome emails)
+## 3. Set up Gmail App Password (for invite/welcome emails)
 
 1. Turn on 2-Step Verification: <https://myaccount.google.com/signinoptions/two-step-verification>
 2. Generate an App Password: <https://myaccount.google.com/apppasswords>
@@ -54,12 +67,25 @@ Browser (React) ──CRUD──▶ Supabase Postgres
 3. You'll use your Gmail address as `GMAIL_USER` and this app password as
    `GMAIL_APP_PASSWORD`.
 
-## 4. Local development
+## 4. Fill in your environment
+
+```bash
+cp .env.example .env
+```
+
+Fill in every value — see [`.env.example`](.env.example) for what each one is
+and where to get it. In particular:
+- `ADMIN_PASSWORD` — pick a **real, strong password**. This app is deployed
+  publicly; don't leave this as a placeholder.
+- `APP_URL` — your Vercel production URL, no trailing slash (leave the
+  default for local testing against a deployed backend, or fill in once you
+  know it after step 6).
+
+## 5. Local development
 
 ```bash
 npm install
-cp .env.example .env    # fill in the values from steps 2 and 3 (skip INTERNAL_API_SECRET for now — step 6)
-npm install -g vercel   # one-time, free CLI — needed to run the /api function locally
+npm install -g vercel   # one-time, free CLI — needed to run the /api functions locally
 vercel dev               # serves the React app AND /api/* together
 ```
 
@@ -67,108 +93,228 @@ vercel dev               # serves the React app AND /api/* together
 just needs a Vercel account) — after that it reads `.env` automatically and
 serves everything at **http://localhost:3000**.
 
-If you only want the frontend (no email testing), `npm run dev` alone works
-too (Vite on port 5173), but calls to `/api/send-welcome-email` will 404.
+If you only want the frontend (no email/API testing), `npm run dev` alone
+works too (Vite on port 5173), but every `/api/*` call will 404.
 
-## 5. Deploy (free, no server to manage)
+## 6. Deploy (free, no server to manage)
 
 1. Push this repo to GitHub.
 2. In the Vercel dashboard: **Add New → Project → Import** your GitHub repo.
    Vercel auto-detects Vite + the `/api` folder — no config needed.
-3. Before the first deploy, add the environment variables from your `.env`
-   file under **Project Settings → Environment Variables** (`INTERNAL_API_SECRET`
-   included — set in step 6 below, but fine to add here too).
+3. Add every variable from your `.env` file under **Project Settings →
+   Environment Variables**.
 4. Deploy. You'll get a public `https://userforge-xxxx.vercel.app` URL.
-5. Every future `git push` to your default branch auto-redeploys.
+5. Set `APP_URL` (in Vercel env vars) and Supabase's **Site URL** (step 2.4)
+   to this exact URL, then redeploy.
+6. Every future `git push` to your default branch auto-redeploys.
 
-## 6. Set up "create/delete user via GitHub issue"
+## 7. Set up "create/delete user via GitHub issue"
 
 Opening a **"👤 New User Request"** or **"🗑️ Delete User Request"** issue (from
-the *Issues → New issue* picker) creates/deletes a real user and — for
-creation — sends them the welcome email, automatically. **Only issues opened
-by a repo owner or collaborator are processed** — anyone else's request gets
-closed with an "unauthorized" comment and nothing happens.
+the *Issues → New issue* picker) creates/deletes a real user through the same
+path as the admin UI — invite email included. **Only issues opened by a repo
+owner or collaborator are processed** — anyone else's request gets closed
+with an "unauthorized" comment and nothing happens.
 
 Setup (one-time):
 
-1. Generate a random secret, e.g. `openssl rand -hex 32` (or any password
-   generator — it just needs to be long and random).
+1. Generate a random secret, e.g. `openssl rand -hex 32`.
 2. Add it in **two places** with the exact same value:
    - Vercel: **Project Settings → Environment Variables** → `INTERNAL_API_SECRET`
    - GitHub: **repo Settings → Secrets and variables → Actions → Secrets tab**
      → **New repository secret** → name `INTERNAL_API_SECRET`
-3. Also add a GitHub repo **variable** (not secret — it's not sensitive):
-   **Settings → Secrets and variables → Actions → Variables tab** → **New
-   repository variable** → name `VERCEL_APP_URL`, value your production URL
-   (e.g. `https://userforge-7vx1.vercel.app`, no trailing slash).
+3. Also add a GitHub repo **variable** (not secret): **Settings → Secrets and
+   variables → Actions → Variables tab** → **New repository variable** →
+   name `VERCEL_APP_URL`, value your production URL (no trailing slash).
 4. Redeploy on Vercel so it picks up `INTERNAL_API_SECRET`.
 
-Now try it: **Issues → New issue → "👤 New User Request"**, fill in the form,
+Try it: **Issues → New issue → "👤 New User Request"**, fill in the form,
 submit. Within a few seconds the Action comments on the issue with the
 result and closes it.
+
+## 8. Login/logout audit log
+
+Every sign-in and sign-out (both regular users and admin) is recorded in the
+private `login_audit` Supabase table — visible in-app under **Admin →
+Audit Log**. It is **not** published to the wiki (this repo is public;
+publishing real users' emails and activity there would be a privacy leak).
+
+A scheduled workflow (`.github/workflows/audit-log-export.yml`, every 4
+hours) also pulls the full log and uploads it as a **private GitHub Actions
+artifact** — downloadable only by people with repo access, auto-expires
+after 30 days. It reuses the `INTERNAL_API_SECRET` / `VERCEL_APP_URL` you
+already set up in step 7 — no extra setup needed.
 
 ## Project structure
 
 ```
 userforge/
 ├── src/
-│   ├── App.jsx                 # page routing + data loading
-│   ├── components/              # UserList, AddUser, BulkUpload, EditDeleteUser, ExportData, Sidebar
+│   ├── App.jsx                    # auth-state routing: login / set-password / user / admin
+│   ├── components/
+│   │   ├── Login.jsx, SetPassword.jsx        # auth screens
+│   │   ├── DepartmentUsers.jsx               # regular user's read-only department view
+│   │   ├── UserList, AddUser, BulkUpload,    # admin views
+│   │   │   EditDeleteUser, ExportData, AdminAuditLog
+│   │   └── Sidebar.jsx, EmptyState.jsx
 │   ├── lib/
 │   │   ├── supabaseClient.js    # Supabase client init
-│   │   ├── api.js               # CRUD calls against the `users` table
-│   │   ├── validation.js        # email/phone/required-field validation
-│   │   ├── csvExcel.js          # CSV/Excel parsing, validation, export, template
-│   │   └── emailClient.js       # calls /api/send-welcome-email
-│   └── assets/                  # logo.svg, empty-state.svg
+│   │   ├── auth.js               # regular-user session handling + own-department reads
+│   │   ├── adminApi.js           # admin-token-authenticated calls to /api/admin-*
+│   │   ├── validation.js         # email/phone/required-field validation
+│   │   └── csvExcel.js           # CSV/Excel parsing, validation, export, template
+│   └── assets/                   # logo.svg, empty-state.svg
 ├── api/
-│   ├── _supabaseAdmin.js        # server-side Supabase client (service_role key, bypasses RLS)
-│   ├── _mailer.js                # shared Nodemailer/Gmail email builder+sender
-│   ├── send-welcome-email.js    # called by the browser after a create/import
-│   ├── github-user-request.js   # called only by the GitHub Action below (secret-authenticated)
-│   └── health.js                # reports whether email is configured (used by the sidebar)
+│   ├── _supabaseAdmin.js         # server-side Supabase client (service_role key, bypasses RLS)
+│   ├── _adminAuth.js             # stateless HMAC-signed admin session tokens
+│   ├── _mailer.js                 # Nodemailer/Gmail: invite + welcome email builders
+│   ├── _validation.js            # shared create-payload normalization
+│   ├── _userCreation.js          # shared create-with-invite / delete-with-auth-cleanup logic
+│   ├── admin-login.js, admin-users.js, admin-audit-log.js
+│   ├── create-user.js, bulk-create-users.js, update-user.js, delete-user.js
+│   ├── record-login.js           # verifies caller (session token or admin token), logs the event
+│   ├── export-audit-log.js       # secret-authenticated, used by the scheduled workflow
+│   ├── github-user-request.js    # called only by the GitHub Action (secret-authenticated)
+│   └── health.js
 ├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   │   ├── new-user-request.yml
-│   │   └── delete-user-request.yml
+│   ├── ISSUE_TEMPLATE/new-user-request.yml, delete-user-request.yml
 │   └── workflows/
-│       └── user-request-sync.yml  # authorizes + processes the above issue forms
+│       ├── ci.yml, codeql.yml, secret-scan.yml, pages.yml
+│       ├── user-request-sync.yml     # GitHub-issue user requests
+│       └── audit-log-export.yml      # every 4h, private artifact
 ├── supabase/
-│   └── schema.sql               # users table + RLS policy
+│   ├── schema.sql                    # full state, for a brand new project
+│   └── migration_002_auth_and_audit.sql  # incremental diff, for an existing project
+├── tests/                             # Vitest unit tests
 └── .env.example
 ```
 
 ## Features
 
-- **Create / Read / Update / Delete** users (full name, email, phone, age,
-  department, role, status)
-- **Search & filter** the user list by name/email, department, status
-- **Bulk upload** via CSV or Excel — per-row validation preview (missing
-  fields, bad email/phone format, in-file and DB duplicate emails) before
-  import; downloadable template
-- **Export** the full list as CSV or Excel
-- **Welcome emails** — sent automatically (single add, bulk import, *and*
-  GitHub-issue requests) with the user's department and role in the email body
-- **Create/delete via GitHub issue** — repo owners/collaborators can open a
-  "New User Request" or "Delete User Request" issue to trigger the same
-  create-or-delete-plus-email flow, without opening the app (see setup step 6)
+- **Admin**: full Create / Read / Update / Delete, search & filter, bulk
+  CSV/Excel import with per-row validation preview, CSV/Excel export, and a
+  login/logout audit log — all gated behind an admin password (`ADMIN_PASSWORD`)
+- **Regular users**: sign in with the password they set via their invite
+  link, see only the users in their own department (enforced by Postgres RLS,
+  not just hidden in the UI)
+- **Invite-based onboarding**: every newly created user (via the admin UI,
+  bulk upload, or a GitHub issue) gets a branded email with their department/
+  role and a one-time Supabase Auth link to set their own password — this app
+  never generates, sees, or stores a password for anyone but the admin
+- **Create/delete via GitHub issue** — repo owners/collaborators only (see
+  setup step 7)
+- **Login/logout audit log** — private Supabase table, admin-only in-app view,
+  plus a 4-hourly export to a private GitHub Actions artifact (see step 8)
+- **CI/CD**: unit tests + coverage (Vitest), CodeQL, Dependabot, secret
+  scanning (Gitleaks), all reported on a [live dashboard](#cicd) published to
+  GitHub Pages
+
+## CI/CD
+
+Every push/PR to `main`/`develop`/`feature/**` runs:
+- **CI** — Vitest unit tests + coverage, plus a production build sanity check
+- **CodeQL** — static security analysis (JavaScript/TypeScript)
+- **Secret Scan** — [Gitleaks](https://github.com/gitleaks/gitleaks) scans the
+  full history for accidentally committed credentials (this workflow **fails
+  the build** on a real finding — unlike the other scans, a leaked secret is
+  a binary incident, not a code-quality nit). Also turn on GitHub's own
+  **Settings → Security → Secret scanning** (a platform feature, not
+  something a workflow file can enable) for push-protection on top of this.
+- **Pages** — rebuilds the CI/CD metrics dashboard (coverage %, CodeQL/Dependabot
+  alert counts, secret-scan findings) at `https://<you>.github.io/<repo>/`
+
+Dependabot opens weekly PRs against `develop` for outdated npm and GitHub
+Actions dependencies (only active once `.github/dependabot.yml` reaches the
+default branch — GitHub only reads that file from there).
+
+**Test coverage note:** unit tests currently cover the pure logic modules
+(`src/lib/validation.js`, `src/lib/csvExcel.js`, `api/_mailer.js`,
+`api/_validation.js`) — not React component rendering. Component-level tests
+(React Testing Library + jsdom) are a good next step; see the roadmap below.
 
 ## Security notes
 
-- The Supabase **anon key** is public by design (it ships in the browser
-  bundle) and the RLS policy in `schema.sql` grants it full read/write access
-  to the `users` table. That's fine for a personal/internal tool you don't
-  share widely. If you plan to expose this app's URL to people you don't
-  trust, add [Supabase Auth](https://supabase.com/docs/guides/auth) and scope
-  the RLS policy to authenticated users instead.
-- The Gmail credentials (`GMAIL_USER` / `GMAIL_APP_PASSWORD`) and the Supabase
-  **service_role key** are **server-side only** — never sent to the browser,
-  only used inside `/api` serverless functions.
-- `/api/send-welcome-email` only sends if a matching row already exists in
-  the `users` table, so it can't be used as a blind relay to email arbitrary
-  addresses.
-- `/api/github-user-request` requires a shared secret header
-  (`INTERNAL_API_SECRET`) that only the GitHub Action knows, and the Action
-  itself refuses to act on issues from anyone who isn't a repo owner/member/
-  collaborator (`author_association` check) — so opening a request issue as
-  a random public visitor does nothing but get the issue closed.
+- There is **no anon-role policy** on the `users` table anymore — the public
+  anon key (which ships in the browser bundle by necessity) grants zero
+  direct table access. Regular users authenticate via Supabase Auth and can
+  only `SELECT` rows in their own department (RLS, enforced in Postgres, not
+  just hidden in the UI). All writes go through `/api` routes using the
+  service_role key.
+- `ADMIN_PASSWORD` gates the admin view. Username is always `"admin"`, but
+  the password is whatever you set — **do not leave it as a placeholder**,
+  this app is deployed publicly. Sessions are stateless HMAC-signed tokens
+  (8-hour expiry), verified server-side on every admin API call.
+- `/api/github-user-request`, `/api/export-audit-log` require a shared secret
+  header (`INTERNAL_API_SECRET`) that only your own GitHub Actions know.
+  `user-request-sync.yml` additionally refuses to act on issues from anyone
+  who isn't a repo owner/member/collaborator.
+- New users never receive a password by email — only a one-time Supabase
+  Auth invite **link**. They set their own password, which this app never
+  sees or stores (Supabase Auth handles hashing/storage).
+- Login/logout audit data stays out of the public wiki on purpose (see step 8).
+
+## Suggested next steps for Prometheus + Grafana dashboards
+
+Prometheus itself is a poor fit here: it works by *scraping* a metrics
+endpoint on a long-running process at a fixed interval, and this app has no
+such process — Vercel functions are stateless and ephemeral, spun up per
+request. Standing up something for Prometheus to scrape would mean adding
+infrastructure this app deliberately doesn't have.
+
+What actually fits the free-tier, serverless shape of this stack:
+
+1. **Grafana Cloud (free tier) + a Postgres data source pointed at Supabase.**
+   Supabase Postgres is directly queryable by Grafana's built-in Postgres
+   plugin — no exporter, no scraping, no extra service. You'd build panels
+   directly on SQL queries against `users` and `login_audit`, e.g.:
+   - Users by department / role / status (simple `GROUP BY` panels)
+   - Signups over time (`date_trunc('day', created_at)` time series)
+   - Daily active users from `login_audit` (`event = 'login'`, grouped by day)
+   - Failed-vs-successful invite email rate, if you start logging that
+     (see roadmap below)
+   Supabase's connection pooler (Session mode, port 5432, or Transaction
+   mode/pgbouncer on 6543) works fine as Grafana's Postgres connection string;
+   use a **read-only Postgres role** for this, not the service_role key.
+2. **Vercel's own Web Analytics / Speed Insights** (free tier available) for
+   request volume, latency, and error rate on the `/api/*` functions — this
+   covers the "operational metrics" half that Prometheus would otherwise be
+   for, without needing your own scrape target.
+3. If you outgrow the free tiers and want real Prometheus-style metrics from
+   the `/api` functions themselves (request counts, latencies, error rates
+   per route), the practical path on a serverless platform is usually
+   **push-based**, not scrape-based: emit metrics from each function to a
+   hosted collector (e.g., Grafana Cloud's Prometheus remote-write endpoint,
+   or a service like Axiom/Better Stack) rather than trying to run Prometheus
+   itself anywhere.
+
+Net recommendation: start with **Grafana Cloud + Supabase Postgres data
+source** (near-zero setup, genuinely free, no infrastructure to run) and only
+reach for a metrics-collector/push setup if you specifically need per-request
+API latency/error dashboards later.
+
+## Enhancement roadmap
+
+Roughly in order of value-for-effort:
+
+1. **Component-level frontend tests** (React Testing Library + jsdom) for
+   `Login`, `SetPassword`, `AddUser`, `BulkUpload` — current tests only cover
+   pure `lib`/`api` logic, not rendering/interaction.
+2. **Password reset ("forgot password") flow** for regular users — currently
+   only the initial invite link exists; `supabase.auth.resetPasswordForEmail`
+   is a small addition reusing the same `SetPassword` screen.
+3. **Rate limiting** on `/api/admin-login` (a handful of failed attempts per
+   IP per minute) — the HMAC token design is sound, but the login endpoint
+   itself has no brute-force protection yet.
+4. **Structured logging for email delivery** (a small `email_log` table:
+   recipient, type, sent/failed, error) — turns the Grafana suggestion above
+   from "possible" into "one more panel."
+5. **Admin roles beyond one shared password** — right now every admin shares
+   one password with no per-admin identity. If more than one person needs
+   admin access, migrate the admin login to Supabase Auth too, with a
+   `is_admin` boolean/role column instead of a separate credential system.
+6. **Self-service department transfer requests** — regular users can already
+   see their department; a natural next step is letting them request a
+   department change (creates a pending request an admin approves), instead
+   of requiring an admin to edit it directly.
+7. **Bulk delete / bulk status change** in the admin UI, mirroring the
+   existing bulk-import flow.
