@@ -1,13 +1,14 @@
+import { generateRandomPassword } from "./_password.js";
 import { getSupabaseAdmin } from "./_supabaseAdmin.js";
-import { sendInviteEmail } from "./_mailer.js";
+import { sendActivationEmail } from "./_mailer.js";
 import { normalizeCreatePayload } from "./_validation.js";
 
 /**
- * Creates a user: validates input, creates a Supabase Auth identity and a
- * one-time invite link (no password is ever generated or stored by this
- * app -- the user sets their own via the link), inserts the business row
- * linked to that auth identity, and emails the branded invite. Shared by
- * api/create-user.js (admin UI), api/bulk-create-users.js, and
+ * Creates a user: validates input, creates a Supabase Auth identity with a
+ * randomly-generated temporary password, generates a one-time activation
+ * (password-recovery) link, inserts the business row linked to that auth
+ * identity, and emails both the temp password and the activation link.
+ * Shared by api/create-user.js (admin UI), api/bulk-create-users.js, and
  * api/github-user-request.js so all three creation paths behave identically.
  */
 export async function createUserWithInvite(rawPayload) {
@@ -23,18 +24,26 @@ export async function createUserWithInvite(rawPayload) {
     return { ok: false, status: 409, error: `A user with email ${data.email} already exists.` };
   }
 
+  const tempPassword = generateRandomPassword();
   let authUserId = null;
-  let inviteLink = null;
+  let activationLink = null;
   try {
+    const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: tempPassword,
+      email_confirm: true,
+    });
+    if (createError) throw createError;
+    authUserId = authData?.user?.id || null;
+
     const redirectTo = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, "") + "/" : undefined;
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "invite",
+      type: "recovery",
       email: data.email,
       options: redirectTo ? { redirectTo } : undefined,
     });
     if (linkError) throw linkError;
-    authUserId = linkData?.user?.id || null;
-    inviteLink = linkData?.properties?.action_link || null;
+    activationLink = linkData?.properties?.action_link || null;
   } catch (err) {
     return { ok: false, status: 502, error: `Could not create login access: ${err.message}` };
   }
@@ -60,21 +69,22 @@ export async function createUserWithInvite(rawPayload) {
 
   let emailSent = false;
   let emailError = null;
-  if (inviteLink) {
+  if (activationLink) {
     try {
-      await sendInviteEmail({
+      await sendActivationEmail({
         email: data.email,
         fullName: data.fullName,
         department: data.department,
         role: data.role,
-        inviteLink,
+        activationLink,
+        tempPassword,
       });
       emailSent = true;
     } catch (err) {
       emailError = err.message;
     }
   } else {
-    emailError = "No invite link was generated.";
+    emailError = "No activation link was generated.";
   }
 
   return { ok: true, status: 200, user: created, emailSent, emailError };

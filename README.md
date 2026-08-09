@@ -3,8 +3,8 @@
 A React user-management app with real authentication: admins manage the
 full roster (create/edit/delete, bulk CSV/Excel import, export), while
 regular users sign in and see only their own department. New users get an
-emailed invite link to set up their own account — no password is ever
-generated, emailed, or stored by this app.
+activation email with a randomly-generated temporary password and a
+one-time link to sign in and immediately set their own.
 
 Runs entirely on free tiers with **no server for you to manage**:
 
@@ -20,7 +20,7 @@ Runs entirely on free tiers with **no server for you to manage**:
 ```
 Admin browser ──X-Admin-Token──▶ /api/{create,update,delete}-user, /api/admin-users ──▶ Supabase (service_role, bypasses RLS)
                                           │
-                                          └──▶ Supabase Auth invite link ──▶ Gmail SMTP (branded invite email)
+                                          └──▶ create Auth user w/ temp password + recovery link ──▶ Gmail SMTP (activation email)
 
 Regular user browser ──Supabase session──▶ Supabase Postgres directly (RLS: own department only)
 
@@ -29,8 +29,8 @@ GitHub issue (owner/collaborator only) ──Action──▶ /api/github-user-re
 
 > **I could not run `npm install` / `npm run dev` in the environment that generated
 > this code** — Node.js isn't installed there. Everything below was written
-> carefully and follows Supabase's documented patterns, but the auth/invite-link
-> flow in particular (`src/lib/auth.js`, `SetPassword.jsx`, the `type=invite` URL
+> carefully and follows Supabase's documented patterns, but the auth/activation-link
+> flow in particular (`src/lib/auth.js`, `SetPassword.jsx`, the `type=recovery` URL
 > handling in `App.jsx`) is the piece most in need of hands-on testing, since I
 > can't exercise a real browser redirect here. Test that flow first.
 
@@ -197,10 +197,10 @@ userforge/
 - **Regular users**: sign in with the password they set via their invite
   link, see only the users in their own department (enforced by Postgres RLS,
   not just hidden in the UI)
-- **Invite-based onboarding**: every newly created user (via the admin UI,
+- **Activation-based onboarding**: every newly created user (via the admin UI,
   bulk upload, or a GitHub issue) gets a branded email with their department/
-  role and a one-time Supabase Auth link to set their own password — this app
-  never generates, sees, or stores a password for anyone but the admin
+  role, a randomly-generated temporary password, and a one-time activation
+  link to sign in and immediately replace it with their own
 - **Create/delete via GitHub issue** — repo owners/collaborators only (see
   setup step 7)
 - **Login/logout audit log** — private Supabase table, admin-only in-app view,
@@ -248,9 +248,15 @@ default branch — GitHub only reads that file from there).
   header (`INTERNAL_API_SECRET`) that only your own GitHub Actions know.
   `user-request-sync.yml` additionally refuses to act on issues from anyone
   who isn't a repo owner/member/collaborator.
-- New users never receive a password by email — only a one-time Supabase
-  Auth invite **link**. They set their own password, which this app never
-  sees or stores (Supabase Auth handles hashing/storage).
+- New users **do** receive a temporary password by email (generated with
+  Node's `crypto.randomBytes`, `api/_password.js`), plus a one-time
+  activation link to replace it. This is a deliberate, less-safe tradeoff
+  than a pure magic-link invite (which this app used until this point) —
+  chosen explicitly rather than defaulted to. The temp password is never
+  logged or persisted anywhere by this app beyond being set as the user's
+  initial Supabase Auth password (which Supabase stores hashed, same as any
+  password change after). Whatever password the user sets after following
+  the link is entirely theirs — this app never sees or stores it either way.
 - Login/logout audit data stays out of the public wiki on purpose (see step 8).
 
 ## Suggested next steps for Prometheus + Grafana dashboards
