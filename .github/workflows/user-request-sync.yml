@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Handle user request issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           API_BASE_URL: ${{ vars.VERCEL_APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
