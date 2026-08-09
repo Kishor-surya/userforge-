@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { List, UserPlus, Upload, UserCog, Download, History, LogOut, Mail } from "lucide-react";
+import {
+  List,
+  UserPlus,
+  Upload,
+  UserCog,
+  Download,
+  History,
+  LogOut,
+  Mail,
+  CalendarDays,
+  Receipt,
+} from "lucide-react";
 
 import logoUrl from "../assets/logo.svg";
 
@@ -9,6 +20,8 @@ export const PAGES = [
   { key: "upload", label: "Bulk Upload", icon: Upload },
   { key: "edit", label: "Edit / Delete User", icon: UserCog },
   { key: "export", label: "Export Data", icon: Download },
+  { key: "leave", label: "Leave Requests", icon: CalendarDays },
+  { key: "provisioning", label: "Provisioning Requests", icon: Receipt },
   { key: "audit", label: "Audit Log", icon: History },
 ];
 

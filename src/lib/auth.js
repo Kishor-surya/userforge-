@@ -46,3 +46,54 @@ export async function getMyDepartmentUsers() {
   if (error) throw error;
   return data;
 }
+
+async function authedFetch(path, options = {}) {
+  const session = await getSession();
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session?.access_token || ""}`,
+      ...(options.headers || {}),
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  return body;
+}
+
+export async function submitLeaveRequest({ startDate, endDate, reason }) {
+  return authedFetch("/api/submit-leave-request", {
+    method: "POST",
+    body: JSON.stringify({ startDate, endDate, reason }),
+  });
+}
+
+/** RLS on leave_requests restricts this to the caller's own rows. */
+export async function getMyLeaveRequests() {
+  const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function submitProvisioningRequest(payload) {
+  return authedFetch("/api/submit-provisioning-request", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** RLS on provisioning_requests restricts this to the caller's own rows. */
+export async function getMyProvisioningRequests() {
+  const { data, error } = await supabase
+    .from("provisioning_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function getMyAttachmentUrl(requestId) {
+  const body = await authedFetch(`/api/attachment-url?id=${encodeURIComponent(requestId)}`, { method: "GET" });
+  return body;
+}

@@ -1,20 +1,3 @@
-export const DEPARTMENTS = ["Engineering", "Sales", "Marketing", "HR", "Finance", "Operations", "Support"];
-export const ROLES = ["Admin", "Manager", "Employee", "Contractor", "Intern"];
-export const STATUSES = ["Active", "Inactive"];
-
-export const USER_COLUMNS = [
-  "id",
-  "full_name",
-  "email",
-  "phone",
-  "age",
-  "department",
-  "role",
-  "status",
-  "created_at",
-  "updated_at",
-];
-
 export const PROVISIONING_CATEGORIES = [
   { key: "stationary", label: "Stationary" },
   { key: "access", label: "Access" },
@@ -25,9 +8,9 @@ export const PROVISIONING_CATEGORIES = [
   { key: "gift_card", label: "Gift Card Request" },
 ];
 
-export const ATTACHMENT_ACCEPT = ".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.txt";
+export const PROVISIONING_CATEGORY_KEYS = PROVISIONING_CATEGORIES.map((c) => c.key);
 
-export const ATTACHMENT_MIME_TYPES = [
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
   "image/png",
   "image/jpeg",
   "application/pdf",
@@ -38,4 +21,18 @@ export const ATTACHMENT_MIME_TYPES = [
   "text/plain",
 ];
 
-export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5MB
+
+export const ATTACHMENT_BUCKET = "provisioning-attachments";
+
+export function isValidProvisioningCategory(category) {
+  return PROVISIONING_CATEGORY_KEYS.includes(category);
+}
+
+export function isAllowedAttachmentType(mimeType) {
+  return ALLOWED_ATTACHMENT_MIME_TYPES.includes(mimeType);
+}
+
+export function sanitizeFilename(name) {
+  return String(name || "attachment").replace(/[^a-zA-Z0-9._-]/g, "_");
+}

@@ -81,3 +81,28 @@ export async function adminGetAuditLog() {
   const body = await adminFetch("/api/admin-audit-log");
   return body.events;
 }
+
+export async function adminGetLeaveRequests() {
+  const body = await adminFetch("/api/admin-leave-requests");
+  return body.requests;
+}
+
+export async function adminDecideLeave(id, decision, reason) {
+  return adminFetch("/api/admin-decide-leave", { method: "POST", body: JSON.stringify({ id, decision, reason }) });
+}
+
+export async function adminGetProvisioningRequests() {
+  const body = await adminFetch("/api/admin-provisioning-requests");
+  return body.requests;
+}
+
+export async function adminDecideProvisioning(id, decision, { approvedAmount, rejectedAmount, reason }) {
+  return adminFetch("/api/admin-decide-provisioning", {
+    method: "POST",
+    body: JSON.stringify({ id, decision, approvedAmount, rejectedAmount, reason }),
+  });
+}
+
+export async function adminGetAttachmentUrl(requestId) {
+  return adminFetch(`/api/attachment-url?id=${encodeURIComponent(requestId)}`, { method: "GET" });
+}

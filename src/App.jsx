@@ -2,14 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import AddUser from "./components/AddUser";
 import AdminAuditLog from "./components/AdminAuditLog";
+import AdminLeaveRequests from "./components/AdminLeaveRequests";
+import AdminProvisioningRequests from "./components/AdminProvisioningRequests";
 import BulkUpload from "./components/BulkUpload";
-import DepartmentUsers from "./components/DepartmentUsers";
 import EditDeleteUser from "./components/EditDeleteUser";
 import ExportData from "./components/ExportData";
 import Login from "./components/Login";
 import SetPassword from "./components/SetPassword";
 import Sidebar from "./components/Sidebar";
 import UserList from "./components/UserList";
+import UserPortal from "./components/UserPortal";
 import { adminGetAllUsers, adminLogout, adminRecordLogin, getAdminToken } from "./lib/adminApi";
 import { getMyDepartmentUsers, getSession, signOut } from "./lib/auth";
 
@@ -101,7 +103,7 @@ export default function App() {
   }
 
   if (authStatus === "user") {
-    return <DepartmentUsers users={users} loading={loading} loadError={loadError} onLogout={handleLogout} />;
+    return <UserPortal users={users} loading={loading} loadError={loadError} onLogout={handleLogout} />;
   }
 
   // authStatus === "admin"
@@ -129,6 +131,8 @@ export default function App() {
             {page === "edit" && <EditDeleteUser users={users} onUserChanged={refresh} />}
             {page === "export" && <ExportData users={users} />}
             {page === "audit" && <AdminAuditLog />}
+            {page === "leave" && <AdminLeaveRequests />}
+            {page === "provisioning" && <AdminProvisioningRequests />}
           </>
         )}
       </main>

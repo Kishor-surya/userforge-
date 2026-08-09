@@ -45,11 +45,12 @@ GitHub issue (owner/collaborator only) ──Action──▶ /api/github-user-re
 ## 2. Set up Supabase (database + auth)
 
 1. Create a new project at [supabase.com](https://supabase.com) (free tier).
-2. Open **SQL Editor → New query**, paste the contents of
-   [`supabase/schema.sql`](supabase/schema.sql), and run it. (Already have an
-   older version of this project? Run
-   [`supabase/migration_002_auth_and_audit.sql`](supabase/migration_002_auth_and_audit.sql)
-   instead — it's the incremental diff, safe to run on existing data.)
+2. Open **SQL Editor → New query**:
+   - **Brand new project**: paste and run [`supabase/schema.sql`](supabase/schema.sql) (the full current state).
+   - **Existing project**: run the numbered migration files in order —
+     [`migration_002_auth_and_audit.sql`](supabase/migration_002_auth_and_audit.sql),
+     then [`migration_003_leave_and_provisioning.sql`](supabase/migration_003_leave_and_provisioning.sql).
+     Both are safe to re-run.
 3. Go to **Project Settings → API** and copy:
    - **Project URL** → `VITE_SUPABASE_URL`
    - **anon public key** → `VITE_SUPABASE_ANON_KEY`
@@ -153,28 +154,38 @@ userforge/
 │   ├── App.jsx                    # auth-state routing: login / set-password / user / admin
 │   ├── components/
 │   │   ├── Login.jsx, SetPassword.jsx        # auth screens
+│   │   ├── UserPortal.jsx                    # regular user's tabbed shell (department / leave / provisioning)
 │   │   ├── DepartmentUsers.jsx               # regular user's read-only department view
+│   │   ├── LeaveRequestForm.jsx, ProvisioningRequestForm.jsx
 │   │   ├── UserList, AddUser, BulkUpload,    # admin views
-│   │   │   EditDeleteUser, ExportData, AdminAuditLog
+│   │   │   EditDeleteUser, ExportData, AdminAuditLog,
+│   │   │   AdminLeaveRequests, AdminProvisioningRequests
 │   │   └── Sidebar.jsx, EmptyState.jsx
 │   ├── lib/
 │   │   ├── supabaseClient.js    # Supabase client init
-│   │   ├── auth.js               # regular-user session handling + own-department reads
+│   │   ├── auth.js               # regular-user session handling, own-department/leave/provisioning reads
 │   │   ├── adminApi.js           # admin-token-authenticated calls to /api/admin-*
 │   │   ├── validation.js         # email/phone/required-field validation
-│   │   └── csvExcel.js           # CSV/Excel parsing, validation, export, template
+│   │   ├── csvExcel.js           # CSV/Excel parsing, validation, export, template
+│   │   ├── fileUtils.js          # File -> base64 for attachment uploads
+│   │   └── statusBadge.js        # shared pending/approved/rejected -> badge-class mapping
 │   └── assets/                   # logo.svg, empty-state.svg
 ├── api/
 │   ├── _supabaseAdmin.js         # server-side Supabase client (service_role key, bypasses RLS)
 │   ├── _adminAuth.js             # stateless HMAC-signed admin session tokens
-│   ├── _mailer.js                 # Nodemailer/Gmail: invite + welcome email builders
+│   ├── _requireUser.js           # verifies a caller's Supabase session server-side
+│   ├── _mailer.js                 # Nodemailer/Gmail: activation + welcome email builders
 │   ├── _validation.js            # shared create-payload normalization
-│   ├── _userCreation.js          # shared create-with-invite / delete-with-auth-cleanup logic
+│   ├── _attachments.js           # provisioning categories, allowed file types, size limit
+│   ├── _userCreation.js          # shared create-with-activation / delete-with-auth-cleanup logic
 │   ├── admin-login.js, admin-users.js, admin-audit-log.js
 │   ├── create-user.js, bulk-create-users.js, update-user.js, delete-user.js
 │   ├── record-login.js           # verifies caller (session token or admin token), logs the event
 │   ├── export-audit-log.js       # secret-authenticated, used by the scheduled workflow
 │   ├── github-user-request.js    # called only by the GitHub Action (secret-authenticated)
+│   ├── submit-leave-request.js, admin-leave-requests.js, admin-decide-leave.js
+│   ├── submit-provisioning-request.js, admin-provisioning-requests.js,
+│   │   admin-decide-provisioning.js, attachment-url.js
 │   └── health.js
 ├── .github/
 │   ├── ISSUE_TEMPLATE/new-user-request.yml, delete-user-request.yml
@@ -183,8 +194,9 @@ userforge/
 │       ├── user-request-sync.yml     # GitHub-issue user requests
 │       └── audit-log-export.yml      # every 4h, private artifact
 ├── supabase/
-│   ├── schema.sql                    # full state, for a brand new project
-│   └── migration_002_auth_and_audit.sql  # incremental diff, for an existing project
+│   ├── schema.sql                        # full state, for a brand new project
+│   ├── migration_002_auth_and_audit.sql       # incremental diff
+│   └── migration_003_leave_and_provisioning.sql  # incremental diff
 ├── tests/                             # Vitest unit tests
 └── .env.example
 ```
@@ -205,6 +217,15 @@ userforge/
   setup step 7)
 - **Login/logout audit log** — private Supabase table, admin-only in-app view,
   plus a 4-hourly export to a private GitHub Actions artifact (see step 8)
+- **Leave requests** — any signed-in user can submit a date-range + reason
+  request from their own portal; admins see and approve/reject every
+  request, users see only their own with the status and admin's note
+- **Provisioning requests** — users request stationary, access,
+  transportation, medical, food, accommodation, or gift-card provisioning,
+  with an amount spent/claimed and an optional attachment (image, PDF, Word,
+  Excel, or text, max 5MB). Admins approve or reject with an approved/
+  rejected amount and a reason; users see only their own requests. Both
+  request types are private data — see the security notes below
 - **CI/CD**: unit tests + coverage (Vitest), CodeQL, Dependabot, secret
   scanning (Gitleaks), all reported on a [live dashboard](#cicd) published to
   GitHub Pages
@@ -258,6 +279,21 @@ default branch — GitHub only reads that file from there).
   password change after). Whatever password the user sets after following
   the link is entirely theirs — this app never sees or stores it either way.
 - Login/logout audit data stays out of the public wiki on purpose (see step 8).
+- **Leave and provisioning request data stays private too, for the same
+  reason** — reasons for leave, medical bills, expense amounts, and
+  attachments belong to real people. `leave_requests` and
+  `provisioning_requests` have RLS `SELECT` policies scoped to the requester's
+  own rows only; nothing is exported to the wiki. Attachments live in a
+  **private** Supabase Storage bucket (`public: false`, no anon/authenticated
+  policies) — the only way to read one is `/api/attachment-url`, which
+  issues a 5-minute signed URL after checking the caller is either the
+  requester (verified session token) or an admin.
+- File uploads are validated against an allow-list of MIME types (image/PDF/
+  Word/Excel/text) and a 5MB size cap, both client-side (fast feedback) and
+  server-side (`api/_attachments.js`, the actual enforcement — never trust
+  client-side-only checks). There's no deep content/virus scanning; if you
+  need that, look at Supabase Storage's upload hooks or an external scanning
+  service before trusting uploaded files further.
 
 ## Suggested next steps for Prometheus + Grafana dashboards
 
