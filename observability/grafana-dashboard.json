@@ -1,0 +1,206 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRES",
+      "label": "Supabase Postgres",
+      "description": "Point this at your Supabase project's Postgres connection (use a read-only role, not service_role)",
+      "type": "datasource",
+      "pluginId": "postgres",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "title": "UserForge Overview",
+  "uid": "userforge-overview",
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": { "from": "now-30d", "to": "now" },
+  "refresh": "5m",
+  "tags": ["userforge", "supabase"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Users",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.users;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Active Users",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.users where status = 'Active';",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Pending Leave Requests",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": null },
+        { "color": "orange", "value": 1 }
+      ] } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.leave_requests where status = 'pending';",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Pending Provisioning Requests",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": null },
+        { "color": "orange", "value": 1 }
+      ] } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.provisioning_requests where status = 'pending';",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Signups Over Time",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('day', created_at) as time, count(*) as signups from public.users where created_at between $__timeFrom() and $__timeTo() group by 1 order by 1;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Daily Logins",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('day', occurred_at) as time, count(*) as logins from public.login_audit where event = 'login' and occurred_at between $__timeFrom() and $__timeTo() group by 1 order by 1;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "bargauge",
+      "title": "Users by Department",
+      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select department, count(*) as users from public.users group by department order by users desc;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "bargauge",
+      "title": "Users by Role",
+      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select role, count(*) as users from public.users group by role order by users desc;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "piechart",
+      "title": "Leave Requests by Status",
+      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select status, count(*) as requests from public.leave_requests group by status;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "barchart",
+      "title": "Provisioning Claimed Amount by Category",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select category, sum(claimed_amount) as claimed_total from public.provisioning_requests group by category order by claimed_total desc;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "piechart",
+      "title": "Provisioning Requests by Status",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select status, count(*) as requests from public.provisioning_requests group by status;",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

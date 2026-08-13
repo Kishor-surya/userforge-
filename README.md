@@ -334,6 +334,13 @@ source** (near-zero setup, genuinely free, no infrastructure to run) and only
 reach for a metrics-collector/push setup if you specifically need per-request
 API latency/error dashboards later.
 
+An importable dashboard covering exactly the panels above (users by
+department/role/status, signups over time, daily logins, pending request
+counts, provisioning spend by category) lives in
+[`observability/grafana-dashboard.json`](observability/grafana-dashboard.json)
+— setup steps, including a read-only Postgres role for Grafana to use,
+in [`observability/README.md`](observability/README.md).
+
 ## Enhancement roadmap
 
 Roughly in order of value-for-effort:
