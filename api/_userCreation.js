@@ -1,3 +1,4 @@
+import { logEmail } from "./_emailLog.js";
 import { generateRandomPassword } from "./_password.js";
 import { getSupabaseAdmin } from "./_supabaseAdmin.js";
 import { sendActivationEmail } from "./_mailer.js";
@@ -86,6 +87,13 @@ export async function createUserWithInvite(rawPayload) {
   } else {
     emailError = "No activation link was generated.";
   }
+
+  await logEmail(supabaseAdmin, {
+    recipient: data.email,
+    emailType: "activation",
+    sent: emailSent,
+    error: emailError,
+  });
 
   return { ok: true, status: 200, user: created, emailSent, emailError };
 }

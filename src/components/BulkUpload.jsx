@@ -78,8 +78,14 @@ export default function BulkUpload({ onUsersImported }) {
       </button>
 
       <div className="field" style={{ marginTop: "1rem" }}>
-        <label>Choose a CSV or Excel file</label>
-        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} disabled={parsing} />
+        <label htmlFor="bulk-upload-file">Choose a CSV or Excel file</label>
+        <input
+          id="bulk-upload-file"
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={handleFile}
+          disabled={parsing}
+        />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

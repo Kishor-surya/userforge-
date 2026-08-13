@@ -45,12 +45,24 @@ export default function SetPassword({ onDone }) {
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>New password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <label htmlFor="new-password">New password</label>
+            <input
+              id="new-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </div>
           <div className="field">
-            <label>Confirm password</label>
-            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+            <label htmlFor="confirm-password">Confirm password</label>
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+            />
           </div>
           <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: "100%" }}>
             {busy ? "Saving…" : "Set password & continue"}

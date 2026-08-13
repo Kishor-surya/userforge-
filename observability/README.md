@@ -3,8 +3,9 @@
 An importable dashboard covering the metrics described in the main
 README's "Suggested next steps for Prometheus + Grafana dashboards"
 section: total/active users, pending leave & provisioning requests,
-signups over time, daily logins, users by department/role, and
-provisioning spend by category.
+signups over time, daily logins, users by department/role, provisioning
+spend by category, email delivery success/failure, and failed admin
+login attempts.
 
 ## 1. Create a read-only Postgres role for Grafana
 
@@ -15,7 +16,13 @@ this dashboard needs. Run in Supabase SQL Editor:
 ```sql
 create role grafana_reader with login password 'CHOOSE-A-STRONG-PASSWORD';
 grant usage on schema public to grafana_reader;
-grant select on public.users, public.leave_requests, public.provisioning_requests, public.login_audit
+grant select on
+  public.users,
+  public.leave_requests,
+  public.provisioning_requests,
+  public.login_audit,
+  public.email_log,
+  public.admin_login_attempts
   to grafana_reader;
 ```
 

@@ -135,3 +135,31 @@ create policy "Users view their own provisioning requests" on public.provisionin
 insert into storage.buckets (id, name, public)
 values ('provisioning-attachments', 'provisioning-attachments', false)
 on conflict (id) do nothing;
+
+-- Admin login rate limiting (api/admin-login.js) and structured email
+-- delivery logging (api/_emailLog.js). Neither table has any RLS policies
+-- -- only service_role ever touches them.
+create table if not exists public.admin_login_attempts (
+  id bigint generated always as identity primary key,
+  ip text not null,
+  succeeded boolean not null,
+  attempted_at timestamptz not null default now()
+);
+
+create index if not exists admin_login_attempts_ip_time_idx
+  on public.admin_login_attempts (ip, attempted_at desc);
+
+alter table public.admin_login_attempts enable row level security;
+
+create table if not exists public.email_log (
+  id bigint generated always as identity primary key,
+  recipient text not null,
+  email_type text not null,
+  sent boolean not null,
+  error text,
+  sent_at timestamptz not null default now()
+);
+
+create index if not exists email_log_sent_at_idx on public.email_log (sent_at desc);
+
+alter table public.email_log enable row level security;

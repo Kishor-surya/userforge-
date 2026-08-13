@@ -92,22 +92,23 @@ export default function AddUser({ onUserAdded }) {
         <div className="form-grid">
           <div>
             <div className="field">
-              <label>Full Name *</label>
-              <input value={form.fullName} onChange={(e) => update("fullName", e.target.value)} />
+              <label htmlFor="add-fullName">Full Name *</label>
+              <input id="add-fullName" value={form.fullName} onChange={(e) => update("fullName", e.target.value)} />
             </div>
             <div className="field">
-              <label>Email *</label>
-              <input value={form.email} onChange={(e) => update("email", e.target.value)} />
+              <label htmlFor="add-email">Email *</label>
+              <input id="add-email" value={form.email} onChange={(e) => update("email", e.target.value)} />
             </div>
             <div className="field">
-              <label>Phone</label>
-              <input value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              <label htmlFor="add-phone">Phone</label>
+              <input id="add-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
             </div>
           </div>
           <div>
             <div className="field">
-              <label>Age</label>
+              <label htmlFor="add-age">Age</label>
               <input
+                id="add-age"
                 type="number"
                 min={0}
                 max={120}
@@ -116,16 +117,16 @@ export default function AddUser({ onUserAdded }) {
               />
             </div>
             <div className="field">
-              <label>Department</label>
-              <select value={form.department} onChange={(e) => update("department", e.target.value)}>
+              <label htmlFor="add-department">Department</label>
+              <select id="add-department" value={form.department} onChange={(e) => update("department", e.target.value)}>
                 {DEPARTMENTS.map((d) => (
                   <option key={d}>{d}</option>
                 ))}
               </select>
             </div>
             <div className="field">
-              <label>Role</label>
-              <select value={form.role} onChange={(e) => update("role", e.target.value)}>
+              <label htmlFor="add-role">Role</label>
+              <select id="add-role" value={form.role} onChange={(e) => update("role", e.target.value)}>
                 {ROLES.map((r) => (
                   <option key={r}>{r}</option>
                 ))}

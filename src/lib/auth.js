@@ -34,6 +34,18 @@ export async function setPasswordAfterInvite(password) {
   if (session) await recordLoginEvent("login", session.access_token);
 }
 
+/**
+ * Self-service "forgot password". Supabase doesn't reveal whether the email
+ * actually has an account (avoids user enumeration either way), so the
+ * caller should show a generic "check your email" message regardless of
+ * whether this resolves.
+ */
+export async function requestPasswordReset(email) {
+  const redirectTo = `${window.location.origin}/`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
 export async function signOut() {
   const session = await getSession();
   if (session) await recordLoginEvent("logout", session.access_token);

@@ -201,6 +201,62 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Email Delivery (Sent vs Failed)",
+      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('day', sent_at) as time, count(*) filter (where sent) as sent, count(*) filter (where not sent) as failed from public.email_log where sent_at between $__timeFrom() and $__timeTo() group by 1 order by 1;",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Failed Emails (Last 7 Days)",
+      "gridPos": { "x": 12, "y": 28, "w": 6, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": null },
+        { "color": "red", "value": 1 }
+      ] } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.email_log where not sent and sent_at > now() - interval '7 days';",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Failed Admin Logins (Last 24h)",
+      "gridPos": { "x": 18, "y": 28, "w": 6, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": null },
+        { "color": "orange", "value": 1 }
+      ] } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as value from public.admin_login_attempts where not succeeded and attempted_at > now() - interval '24 hours';",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }

@@ -49,8 +49,9 @@ GitHub issue (owner/collaborator only) ──Action──▶ /api/github-user-re
    - **Brand new project**: paste and run [`supabase/schema.sql`](supabase/schema.sql) (the full current state).
    - **Existing project**: run the numbered migration files in order —
      [`migration_002_auth_and_audit.sql`](supabase/migration_002_auth_and_audit.sql),
-     then [`migration_003_leave_and_provisioning.sql`](supabase/migration_003_leave_and_provisioning.sql).
-     Both are safe to re-run.
+     [`migration_003_leave_and_provisioning.sql`](supabase/migration_003_leave_and_provisioning.sql),
+     then [`migration_004_admin_rate_limit_and_email_log.sql`](supabase/migration_004_admin_rate_limit_and_email_log.sql).
+     All are safe to re-run.
 3. Go to **Project Settings → API** and copy:
    - **Project URL** → `VITE_SUPABASE_URL`
    - **anon public key** → `VITE_SUPABASE_ANON_KEY`
@@ -194,10 +195,11 @@ userforge/
 │       ├── user-request-sync.yml     # GitHub-issue user requests
 │       └── audit-log-export.yml      # every 4h, private artifact
 ├── supabase/
-│   ├── schema.sql                        # full state, for a brand new project
-│   ├── migration_002_auth_and_audit.sql       # incremental diff
-│   └── migration_003_leave_and_provisioning.sql  # incremental diff
-├── tests/                             # Vitest unit tests
+│   ├── schema.sql                            # full state, for a brand new project
+│   ├── migration_002_auth_and_audit.sql          # incremental diff
+│   ├── migration_003_leave_and_provisioning.sql  # incremental diff
+│   └── migration_004_admin_rate_limit_and_email_log.sql  # incremental diff
+├── tests/                             # Vitest unit tests (pure logic + RTL component tests)
 └── .env.example
 ```
 
@@ -205,10 +207,12 @@ userforge/
 
 - **Admin**: full Create / Read / Update / Delete, search & filter, bulk
   CSV/Excel import with per-row validation preview, CSV/Excel export, and a
-  login/logout audit log — all gated behind an admin password (`ADMIN_PASSWORD`)
+  login/logout audit log — all gated behind an admin password (`ADMIN_PASSWORD`),
+  with IP-based rate limiting on failed login attempts (5 per 15 minutes)
 - **Regular users**: sign in with the password they set via their invite
-  link, see only the users in their own department (enforced by Postgres RLS,
-  not just hidden in the UI)
+  link (or reset via the self-service "Forgot password?" link on the sign-in
+  screen), see only the users in their own department (enforced by Postgres
+  RLS, not just hidden in the UI)
 - **Activation-based onboarding**: every newly created user (via the admin UI,
   bulk upload, or a GitHub issue) gets a branded email with their department/
   role, a randomly-generated temporary password, and a one-time activation
@@ -248,10 +252,14 @@ Dependabot opens weekly PRs against `develop` for outdated npm and GitHub
 Actions dependencies (only active once `.github/dependabot.yml` reaches the
 default branch — GitHub only reads that file from there).
 
-**Test coverage note:** unit tests currently cover the pure logic modules
+**Test coverage note:** unit tests cover both the pure logic modules
 (`src/lib/validation.js`, `src/lib/csvExcel.js`, `api/_mailer.js`,
-`api/_validation.js`) — not React component rendering. Component-level tests
-(React Testing Library + jsdom) are a good next step; see the roadmap below.
+`api/_validation.js`, `api/_rateLimit.js`, `api/_emailLog.js`) and, via
+React Testing Library + jsdom, component rendering/interaction for `Login`
+(including the forgot-password flow), `SetPassword`, `AddUser`, and
+`BulkUpload`. `EditDeleteUser` and the leave/provisioning forms don't have
+component tests yet — a reasonable next addition, following the same
+pattern.
 
 ## Security notes
 
@@ -312,8 +320,9 @@ What actually fits the free-tier, serverless shape of this stack:
    - Users by department / role / status (simple `GROUP BY` panels)
    - Signups over time (`date_trunc('day', created_at)` time series)
    - Daily active users from `login_audit` (`event = 'login'`, grouped by day)
-   - Failed-vs-successful invite email rate, if you start logging that
-     (see roadmap below)
+   - Failed-vs-successful email delivery rate (`email_log`) and failed admin
+     login attempts (`admin_login_attempts`) — both already tracked; see the
+     dashboard below
    Supabase's connection pooler (Session mode, port 5432, or Transaction
    mode/pgbouncer on 6543) works fine as Grafana's Postgres connection string;
    use a **read-only Postgres role** for this, not the service_role key.
@@ -343,27 +352,29 @@ in [`observability/README.md`](observability/README.md).
 
 ## Enhancement roadmap
 
-Roughly in order of value-for-effort:
+**Done:**
 
-1. **Component-level frontend tests** (React Testing Library + jsdom) for
-   `Login`, `SetPassword`, `AddUser`, `BulkUpload` — current tests only cover
-   pure `lib`/`api` logic, not rendering/interaction.
-2. **Password reset ("forgot password") flow** for regular users — currently
-   only the initial invite link exists; `supabase.auth.resetPasswordForEmail`
-   is a small addition reusing the same `SetPassword` screen.
-3. **Rate limiting** on `/api/admin-login` (a handful of failed attempts per
-   IP per minute) — the HMAC token design is sound, but the login endpoint
-   itself has no brute-force protection yet.
-4. **Structured logging for email delivery** (a small `email_log` table:
-   recipient, type, sent/failed, error) — turns the Grafana suggestion above
-   from "possible" into "one more panel."
-5. **Admin roles beyond one shared password** — right now every admin shares
+- ~~Component-level frontend tests~~ — `Login` (incl. forgot-password),
+  `SetPassword`, `AddUser`, `BulkUpload` now have RTL/jsdom tests.
+- ~~Password reset ("forgot password") flow~~ — self-service link on the
+  sign-in screen, `supabase.auth.resetPasswordForEmail`, reuses `SetPassword`.
+- ~~Rate limiting on `/api/admin-login`~~ — 5 failed attempts per IP per 15
+  minutes, backed by `admin_login_attempts` (migration 004).
+- ~~Structured logging for email delivery~~ — `email_log` table + two new
+  Grafana panels (`observability/grafana-dashboard.json`).
+
+**Still open, roughly in order of value-for-effort:**
+
+1. **Admin roles beyond one shared password** — right now every admin shares
    one password with no per-admin identity. If more than one person needs
-   admin access, migrate the admin login to Supabase Auth too, with a
+   admin access, migrate the admin login to Supabase Auth too, with an
    `is_admin` boolean/role column instead of a separate credential system.
-6. **Self-service department transfer requests** — regular users can already
+2. **Self-service department transfer requests** — regular users can already
    see their department; a natural next step is letting them request a
    department change (creates a pending request an admin approves), instead
    of requiring an admin to edit it directly.
-7. **Bulk delete / bulk status change** in the admin UI, mirroring the
+3. **Bulk delete / bulk status change** in the admin UI, mirroring the
    existing bulk-import flow.
+4. **Component tests for `EditDeleteUser`, `LeaveRequestForm`, and
+   `ProvisioningRequestForm`** — same RTL/jsdom pattern as the four covered
+   above, just not done yet for these.

@@ -417,3 +417,20 @@ tr:last-child td {
   color: var(--text);
   border-bottom-color: var(--primary);
 }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  margin-top: 0.6rem;
+  text-decoration: underline;
+}
+
+.forgot-form {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}

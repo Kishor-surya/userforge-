@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { issueAdminToken } from "./_adminAuth.js";
+import { checkAdminLoginRateLimit, getClientIp, recordAdminLoginAttempt } from "./_rateLimit.js";
+import { getSupabaseAdmin } from "./_supabaseAdmin.js";
 
 function safeEqual(a, b) {
   const bufA = Buffer.from(String(a));
@@ -21,8 +23,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  const supabaseAdmin = getSupabaseAdmin();
+  const ip = getClientIp(req);
+
+  const { allowed, retryAfterSeconds } = await checkAdminLoginRateLimit(supabaseAdmin, ip);
+  if (!allowed) {
+    res.setHeader("Retry-After", String(retryAfterSeconds));
+    res.status(429).json({ error: "Too many failed admin login attempts. Try again later." });
+    return;
+  }
+
   const { username, password } = req.body || {};
-  if (username !== "admin" || !password || !safeEqual(password, adminPassword)) {
+  const succeeded = username === "admin" && Boolean(password) && safeEqual(password, adminPassword);
+
+  await recordAdminLoginAttempt(supabaseAdmin, ip, succeeded);
+
+  if (!succeeded) {
     res.status(401).json({ error: "Invalid username or password." });
     return;
   }
